@@ -17,13 +17,13 @@
 2. 開啟「允許使用者指令碼」選項
     - ![image](https://hackmd.io/_uploads/SJE0vqMX-e.png =80%x)
 
-### 步驟 2：安裝腳本
+### 步驟 3：安裝腳本
 1.  點擊瀏覽器右上角的 Tampermonkey 圖示，選擇「**添加新腳本**」。
 2.  刪除編輯器內原本的所有內容。
-3.  複製本專案 `script.js` 的完整程式碼，貼入編輯器中。
-4.  按下 `Ctrl + S` 或點擊「**檔案**」>「**儲存**」。
+3.  複製本專案 `PortalHelper.js` 的完整程式碼，貼入編輯器中並儲存。
+4.  重複上述步驟，再新增一支腳本並貼上 `AutoAttend.js` 的完整程式碼後儲存。
 
-### 步驟 3：確保腳本已啟用 (重要設定)
+### 步驟 4：確保腳本已啟用 (重要設定)
 安裝完成後，請確認以下設定以確保腳本能正常運作：
 1.  點擊瀏覽器右上角的 Tampermonkey 圖示。
 2.  確認 **Tampermonkey** 本身是 **「已啟用」** (Enabled) 狀態。
@@ -56,11 +56,11 @@
 
 在安裝腳本前，請先打開對應的腳本檔案，把以下個人資訊的欄位填好：
 
-- **`PortalHelper.user.js`**
+- **`PortalHelper.js`**
   - `YOUR_ID`：你的 NYCU 單一入口帳號
   - `YOUR_PWD`：你的 NYCU 單一入口密碼
 
-- **`AutoAttend.user.js`**
+- **`AutoAttend.js`**
   - `LINE_USER_ID`：接收 LINE 通知的使用者專屬 ID
 
 > ⚠️ **安全警告**：請勿將填入真實帳號密碼與 Token 的腳本分享給他人，或上傳至公開的 GitHub 儲存庫。
@@ -93,7 +93,7 @@
 <img width="200" alt="image" src="https://github.com/user-attachments/assets/48fbeb02-5896-4f32-b2f7-a1f217cf8792" />
 [@303kmzhe](https://line.me/R/ti/p/%40303kmzhe)
 
-👉 最後，將複製好的 `LINE_USER_ID` 貼回 `AutoAttend.user.js` 腳本最上方的設定區即可。
+👉 最後，將複製好的 `LINE_USER_ID` 貼回 `AutoAttend.js` 腳本最上方的設定區即可。
 
 ## 🚀 主要功能
 
