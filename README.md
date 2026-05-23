@@ -4,18 +4,6 @@
 
 ![Version](https://img.shields.io/badge/version-1.0-green)
 ![image](https://hackmd.io/_uploads/r11rU5zQ-e.png)
-
-
-## 🚀 主要功能
-
-* **📅 工時排程管理**：協助規劃每日工作時段，避免工時計算錯誤。
-* **🛡️ 連線穩定機制**：優化網頁 Session 管理，減少因閒置而發生資料遺失的狀況。
-* **⌚ 介面視覺優化**：提供深色模式面板與即時時間顯示，提升閱讀體驗。
-* **🚫 誤觸防護**：優化瀏覽器彈窗行為，提供更流暢的操作流程。
-* **💓 雙核心運作**：UI 顯示與執行邏輯分離，確保瀏覽器背景節能模式下時間依然準確。
-
----
-
 ## 🛠️ 安裝教學
 
 ### 步驟 1：安裝瀏覽器擴充功能
@@ -63,6 +51,60 @@
 4.  輸入網址：`timeclock.nycu.edu.tw` 並儲存。
 
 ---
+
+## 🔑 開始前先填這 3 個欄位
+
+在安裝腳本前，請先打開對應的腳本檔案，把以下個人資訊的欄位填好：
+
+- **`PortalHelper.user.js`**
+  - `YOUR_ID`：你的 NYCU 單一入口帳號
+  - `YOUR_PWD`：你的 NYCU 單一入口密碼
+
+- **`AutoAttend.user.js`**
+  - `LINE_USER_ID`：接收 LINE 通知的使用者專屬 ID
+
+> ⚠️ **安全警告**：請勿將填入真實帳號密碼與 Token 的腳本分享給他人，或上傳至公開的 GitHub 儲存庫。
+
+---
+
+### 📱 圖文教學：如何取得 `LINE_USER_ID`
+
+為了讓腳本能專屬推播通知給你，你需要建立一個免費的 LINE 機器人。請跟著以下步驟操作：
+
+**步驟 1：建立 Messaging API 頻道**
+進入 [LINE Developers Console](https://developers.line.biz/console/) 登入你的 LINE 帳號。建立或選擇一個 Provider 後，點選「Create a new channel」，並選擇 **「Messaging API」**。
+<img width="1124" height="606" alt="image" src="https://github.com/user-attachments/assets/06a0b405-3a07-46ba-8391-8b35258ace4e" />
+
+**步驟 2：跳轉建立官方帳號**
+目前 LINE 系統規定需先建立官方帳號才能使用 API，請直接點選畫面中的 **「Create a LINE Official Account」** 綠色按鈕。
+<img width="1496" height="361" alt="image" src="https://github.com/user-attachments/assets/132f183d-1b69-4fc7-a274-c20d2beb6e44" />
+
+**步驟 3：填寫官方帳號基本資料**
+填寫官方帳號的必要資訊（如帳號名稱、電子郵件、業種等），完成後點選最下方的「確定」完成建立。
+<img width="824" height="921" alt="image" src="https://github.com/user-attachments/assets/6a456de3-2328-4ec7-9e7b-5799f3456d44" />
+
+**步驟 4：取得 `LINE_USER_ID` (專屬 ID)**
+回到 LINE Developers Console，進入你剛剛建好的頻道。在預設的 **「Basic settings」** 分頁中一直滑到最底部，找到 **「Your user ID」**。這串以 `U` 開頭的代碼就是腳本需要的 `LINE_USER_ID`，請將它複製下來！
+<img width="522" height="621" alt="image" src="https://github.com/user-attachments/assets/95b18d35-4552-4e00-b901-446757e5c299" />
+
+
+**步驟 5：加機器人為好友 (重要！)**
+在手機將「柴柴機器人」加入好友：<img width="200" alt="image" src="https://github.com/user-attachments/assets/8fc57c47-b8ae-4dc9-889d-f23e6db4170a" />
+<img width="200" alt="image" src="https://github.com/user-attachments/assets/48fbeb02-5896-4f32-b2f7-a1f217cf8792" />
+[@303kmzhe](https://line.me/R/ti/p/%40303kmzhe)
+
+👉 最後，將複製好的 `LINE_USER_ID` 貼回 `AutoAttend.user.js` 腳本最上方的設定區即可。
+
+## 🚀 主要功能
+
+* **📅 工時排程管理**：協助規劃每日工作時段，避免工時計算錯誤。
+* **🛡️ 連線穩定機制**：優化網頁 Session 管理，減少因閒置而發生資料遺失的狀況。
+* **⌚ 介面視覺優化**：提供深色模式面板與即時時間顯示，提升閱讀體驗。
+* **🚫 誤觸防護**：優化瀏覽器彈窗行為，提供更流暢的操作流程。
+* **💓 雙核心運作**：UI 顯示與執行邏輯分離，確保瀏覽器背景節能模式下時間依然準確。
+
+---
+
 
 ## 📖 使用說明
 
