@@ -13,9 +13,11 @@
 
 ### 步驟 2：開啟篡改猴
 1. 於瀏覽器擴充功能找到「篡改猴」，點選右方三個點的圖示，選「管理擴充功能」
-    - ![image](https://hackmd.io/_uploads/S1de_cG7Ze.png =50%x)
+    - <img width="200" alt="image" src="https://github.com/user-attachments/assets/7ab5be84-afd2-45cc-beab-4f95a419d821" />
+
 2. 開啟「允許使用者指令碼」選項
-    - ![image](https://hackmd.io/_uploads/SJE0vqMX-e.png =80%x)
+    - <img width="400" alt="image" src="https://github.com/user-attachments/assets/3905f856-a1c0-41bc-9544-92c7bc24166e" />
+
 
 ### 步驟 3：安裝腳本
 1.  點擊瀏覽器右上角的 Tampermonkey 圖示，選擇「**添加新腳本**」。
