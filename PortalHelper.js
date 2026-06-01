@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      2.0
 // @description  解決前端框架資料綁定問題，優化 Token Timeout 處理流程，全自動登入跳轉。
-// @author       Gemini
+// @author       Gemini & 柴柴
 // @match        https://portal.nycu.edu.tw/*
 // @grant        none
 // ==/UserScript==
