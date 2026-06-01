@@ -1,10 +1,12 @@
 // ==UserScript==
 // @name         NYCU 自動簽到退排程助手
-// @namespace    [http://tampermonkey.net/](http://tampermonkey.net/)
-// @version      1.0
-// @description  多筆排程佇列，防斷線機制，支援 LINE 推播通知
-// @author       Gemini
+// @namespace    http://tampermonkey.net/
+// @version      2.0
+// @description  多筆排程佇列，支援空白時數計畫，優化重複按鈕過濾，並支援 LINE 推播通知
+// @author       Gemini & 柴柴
 // @match        *://*/*OnlineProjectAttend_NYCU.aspx*
+// @match        *://*/*TimeOut.aspx*
+// @run-at       document-start
 // @grant        GM_xmlhttpRequest
 // @connect      api.line.me
 // ==/UserScript==
@@ -12,10 +14,29 @@
 (function() {
     'use strict';
 
+    if (window.location.href.toLowerCase().includes('timeout.aspx')) {
+        const script = document.createElement('script');
+        script.textContent = "window.alert = function(){ console.log('已攔截逾時彈窗'); };";
+        document.documentElement.appendChild(script);
+
+        window.addEventListener('DOMContentLoaded', () => {
+            document.documentElement.innerHTML = `
+                <div style="background:#111; color:#fff; font-size:24px; display:flex; justify-content:center; align-items:center; height:100vh; flex-direction:column; font-family:sans-serif;">
+                    <div style="font-size:50px; margin-bottom:20px;">🔄</div>
+                    <div>系統已斷線，成功攔截彈窗，正在自動返回 Portal 重新登入...</div>
+                </div>`;
+            setTimeout(() => {
+                window.location.href = "https://portal.nycu.edu.tw/";
+            }, 1500);
+        });
+        return;
+    }
+
     // --- 設定區 & 狀態管理 ---
-    const STORAGE_PREFIX = 'nycu_attendance_v1_';
+    const STORAGE_PREFIX = 'nycu_attendance_core_';
     const KEY_SCHEDULES = STORAGE_PREFIX + 'schedules';
     const KEY_EXECUTING_TASK = STORAGE_PREFIX + 'executing_task';
+    const KEY_PENDING_NOTIFY = STORAGE_PREFIX + 'pending_notify';
     const KEY_DEBUG_MODE = STORAGE_PREFIX + 'debug_mode';
     const KEY_UI_STATE = STORAGE_PREFIX + 'ui_state';
     const KEY_LAST_REFRESH = STORAGE_PREFIX + 'last_refresh';
@@ -27,10 +48,10 @@
     const KEEP_ALIVE_INTERVAL_MINUTES = 5;
 
     // --- 工具函式 ---
-    function sendLineNotify(actionText, projectName, status = 'success') {
-        const LINE_TOKEN = "XwhlG35/NiaSrZXBNZ7tTBtvfZqe9Rgotn/svgGpmZk+H6L/vWLHOyX+lKj/Ub+6d8cx3CrdMyq7gLAhyqTUCA8jPfYp/trWIIiruUl5W0cW5w4l3Pch8RGL9H75iIdel0bTJjh3S5RlHXbUo2+KhwdB04t89/1O/w1cDnyilFU="; 
-        // 👇👇👇 請在這裡填入你的 LINE 資訊 👇👇👇
-        const LINE_USER_ID = "";
+    function sendLineNotify(actionText, projectName, status = 'success', savedMissingHours = "未知") {
+        // 👇👇👇 請使用者在這裡填入自己的 LINE 資訊 👇👇👇
+        const LINE_TOKEN = "";   // <--- 填入你的 LINE Channel Access Token
+        const LINE_USER_ID = ""; // <--- 填入你的 LINE User ID (U 開頭)
         // 👆👆👆 ------------------------------ 👆👆👆
 
         if (!LINE_TOKEN || !LINE_USER_ID) return;
@@ -39,19 +60,37 @@
         const isDebug = actionText.includes('[測試]');
         const realAction = actionText.replace('[測試] ', '');
 
-        let msgText = '';
+        let missingHoursText = '';
 
-        if (status === 'error') {
-            msgText = `❌ 自動${realAction}失敗！\n⚠️ 找不到對應的按鈕\n📌 ${projectName}\n⏰ ${timeStr}`;
+        if (savedMissingHours !== "未知" && savedMissingHours !== -1) {
+            missingHoursText = `\n⏳ 尚缺: ${savedMissingHours}`;
         } else {
-            let actionIcon = realAction === '簽到' ? '🟢' : '🔴';
+            const allProjects = scanProjects();
+            const matchedProj = allProjects.find(p => p.name === projectName);
+            if (matchedProj && matchedProj.missing !== "未知") {
+                missingHoursText = `\n⏳ 尚缺: ${matchedProj.missing}`;
+            }
+        }
+
+        const list = getSchedules();
+        let queueText = `\n📋 剩餘排程: ${list.length} 筆`;
+        if (list.length > 0) {
+            const nextTime = new Date(list[0].targetTime).toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
+            queueText += `\n👉 下一筆: ${nextTime} [${list[0].actionText}]`;
+        }
+
+        let msgText = '';
+        if (status === 'error') {
+            msgText = `❌ 自動${realAction}失敗！\n⚠️ 找不到對應的按鈕\n📌 ${projectName}${missingHoursText}\n⏰ ${timeStr}${queueText}`;
+        } else {
+            let actionIcon = realAction === '簽到' ? '🟢' : '🔵';
             if (isDebug) actionIcon = '🐞';
-            msgText = `${actionIcon} 自動${actionText}成功\n📌 ${projectName}\n⏰ ${timeStr}`;
+            msgText = `${actionIcon} 自動${actionText}成功\n📌 ${projectName}${missingHoursText}\n⏰ ${timeStr}${queueText}`;
         }
 
         GM_xmlhttpRequest({
             method: "POST",
-            url: "[https://api.line.me/v2/bot/message/push](https://api.line.me/v2/bot/message/push)",
+            url: "https://api.line.me/v2/bot/message/push",
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${LINE_TOKEN}`
@@ -85,7 +124,10 @@
     function updateTabTitle(text) { document.title = text + " - 線上簽到退"; }
     function getStorage(key) { return localStorage.getItem(key); }
     function setStorage(key, val) { localStorage.setItem(key, val); }
-    function formatTime(dateObj) { return new Date(dateObj).toLocaleTimeString('zh-TW', { hour12: false }); }
+
+    function formatTime(dateObj) {
+        return new Date(dateObj).toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
+    }
 
     function formatCountDown(ms) {
         if (ms < 0) return "00:00:00";
@@ -116,26 +158,47 @@
         const grid = document.getElementById(MAIN_PAGE_ID);
         if (!grid) return [];
 
-        const projectList = [];
+        const projectMap = new Map();
         const buttons = Array.from(grid.querySelectorAll('a[id*="LinkButton_signIn"], a[id*="LinkButton_signOut"]'));
 
         buttons.forEach((btn, index) => {
+            if (projectMap.has(btn.id)) return;
+
             let tr = btn.closest('tr');
             if (tr) {
                 const tds = tr.querySelectorAll('td');
                 let name = "未知計畫";
-                let missingHours = -1;
+                let missingHours = "未知";
+                let dateRange = "";
+
                 if (tds.length > 0) {
-                    const text = tds[0].innerText;
-                    name = text.includes('\n') ? text.split('\n')[0].trim() : text.trim();
-                    const match = text.match(/尚缺\s*[：:]\s*(\d+)\s*小時/);
-                    if (match && match[1]) missingHours = parseInt(match[1], 10);
+                    name = tds[0].innerText.replace(/\n/g, '').trim();
                 }
+
+                const fullText = tr.innerText;
+
+                const match = fullText.match(/尚缺\s*[：:]\s*(\d+)\s*小時/);
+                if (match && match[1]) {
+                    missingHours = match[1] + "h";
+                } else if (fullText.includes("尚缺")) {
+                    missingHours = "不限";
+                }
+
+                const dateMatch = fullText.match(/(\d{4}-\d{2}-\d{2})\s*~\s*(\d{4}-\d{2}-\d{2})/);
+                if (dateMatch) {
+                    const d1 = dateMatch[1].substring(5).replace('-', '/');
+                    const d2 = dateMatch[2].substring(5).replace('-', '/');
+                    dateRange = ` (${d1}~${d2})`;
+                }
+
+                name = name + dateRange;
                 const type = btn.id.includes('signIn') ? 'signIn' : 'signOut';
-                projectList.push({ index, name, missing: missingHours, btnId: btn.id, type });
+
+                projectMap.set(btn.id, { index, name, missing: missingHours, btnId: btn.id, type });
             }
         });
-        return projectList;
+
+        return Array.from(projectMap.values());
     }
 
     function getActionButtonById(id) { return document.getElementById(id); }
@@ -147,9 +210,16 @@
         let defaultInH = now.getHours() % 12;
         if (defaultInH === 0) defaultInH = 12;
 
-        const availableSignIn = projects.filter(p => p.type === 'signIn' && p.missing !== 0);
+        const availableSignIn = projects.filter(p => p.type === 'signIn');
         let targetId = availableSignIn.length > 0 ? availableSignIn[0].btnId : (projects.length > 0 ? projects[0].btnId : "");
-        let defaultOutH = availableSignIn.length > 0 && availableSignIn[0].missing <= 4 && availableSignIn[0].missing > 0 ? availableSignIn[0].missing : 1;
+
+        let defaultOutH = 1;
+        if (availableSignIn.length > 0) {
+            let parsedM = parseInt(availableSignIn[0].missing);
+            if (!isNaN(parsedM) && parsedM <= 4 && parsedM > 0) {
+                defaultOutH = parsedM;
+            }
+        }
 
         return {
             inPeriod: defaultInPeriod, inH: defaultInH, inM: now.getMinutes(),
@@ -191,19 +261,21 @@
     }
 
     function checkLogoutAndRedirect() {
+        if (!document.body) return false;
         const bodyText = document.body.innerText;
         if (bodyText.includes("您尚未登入") || bodyText.includes("Timeout=1") || bodyText.includes("已被登出")) {
             const div = document.createElement('div');
             div.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); color:#fff; display:flex; justify-content:center; align-items:center; z-index:999999; font-size:24px; flex-direction:column;';
             div.innerHTML = `<div style="margin-bottom:20px; font-size:50px;">🔄</div><div>連線逾時，正在自動返回入口網登入...</div>`;
             document.body.appendChild(div);
-            setTimeout(() => { window.location.href = "[https://portal.nycu.edu.tw/](https://portal.nycu.edu.tw/)"; }, 1000);
+            setTimeout(() => { window.location.href = "https://portal.nycu.edu.tw/"; }, 1000);
             return true;
         }
         return false;
     }
 
     function createPanel() {
+        if (!document.body) return;
         if (document.getElementById('nycu_helper_panel') || checkLogoutAndRedirect()) return;
 
         const state = getInitialState();
@@ -216,7 +288,7 @@
 
         div.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                <h3 id="panel_title" style="margin:0; font-size:16px; color:#4CAF50;">📅 排程助手 V1.0</h3>
+                <h3 id="panel_title" style="margin:0; font-size:16px; color:#4CAF50;">📅 排程助手 V2.0</h3>
                 <span id="btn_panel_toggle" style="${toggleBtnStyle}" title="縮小/展開">${isCollapsed ? '⬜' : '➖'}</span>
             </div>
             <div id="panel_content_mini" style="display:${isCollapsed ? 'block' : 'none'}; color:yellow; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
@@ -327,7 +399,7 @@
         const projects = scanProjects();
         let html = '';
 
-        const filteredProjects = projects.filter(p => p.type === 'signOut' || (p.type === 'signIn' && p.missing !== 0));
+        const filteredProjects = projects;
 
         if (filteredProjects.length === 0) {
             html = `<option value="-1" data-type="none">⚠️ 無可操作計畫 (等待或重新整理)</option>`;
@@ -335,7 +407,7 @@
             const currentSelected = document.getElementById('target_project').value;
             filteredProjects.forEach(p => {
                 const isSel = (p.btnId === currentSelected) ? 'selected' : '';
-                const missingText = (p.missing > 0 && p.type === 'signIn') ? `(缺${p.missing}h)` : '';
+                const missingText = (p.missing !== "未知") ? `(缺${p.missing})` : '';
                 const icon = p.type === 'signOut' ? '🏃‍♂️(執行中)' : '📝';
                 html += `<option value="${p.btnId}" data-type="${p.type}" ${isSel}>${icon} ${p.name} ${missingText}</option>`;
             });
@@ -490,7 +562,6 @@
 
             list.shift();
             saveSchedules(list);
-            setStorage(KEY_EXECUTING_TASK, JSON.stringify(nextTask));
 
             let btn = getActionButtonById(nextTask.projectId);
 
@@ -505,11 +576,16 @@
             if (!btn) {
                 const scan = scanProjects();
                 const typeNeeded = nextTask.actionText === '簽退' ? 'signOut' : 'signIn';
-                const fuzzy = scan.find(p => p.type === typeNeeded && p.name.includes(nextTask.projectName.substring(0,3)));
+                let fuzzy = scan.find(p => p.type === typeNeeded && p.name === nextTask.projectName);
+                if (!fuzzy) {
+                     // 退一步，比對前半段名稱
+                     fuzzy = scan.find(p => p.type === typeNeeded && p.name.includes(nextTask.projectName.split(' (')[0]));
+                }
                 if (fuzzy) btn = document.getElementById(fuzzy.btnId);
             }
 
             if (btn) {
+                setStorage(KEY_EXECUTING_TASK, JSON.stringify(nextTask));
                 btn.click();
             } else {
                 log(`❌ 錯誤：找不到對應的${nextTask.actionText}按鈕！可能是時數已滿或頁面未更新。`);
@@ -534,7 +610,7 @@
             confirmBtn.style.border = "5px solid #ff4444";
             confirmBtn.style.boxShadow = "0 0 10px red";
             log("🛑 Debug模式：攔截送出，請手動按確認");
-            sendLineNotify(`[測試] ${task.actionText}`, task.projectName);
+            sendLineNotify(`[測試] ${task.actionText}`, task.projectName, 'success', -1);
             localStorage.removeItem(KEY_EXECUTING_TASK);
             return;
         }
@@ -544,12 +620,16 @@
         localStorage.removeItem(KEY_EXECUTING_TASK);
         setStorage(KEY_LAST_REFRESH, Date.now());
 
-        sendLineNotify(task.actionText, task.projectName);
+        const pendingNotify = {
+            actionText: task.actionText,
+            projectName: task.projectName
+        };
+        setStorage(KEY_PENDING_NOTIFY, JSON.stringify(pendingNotify));
 
         setTimeout(() => {
             confirmBtn.click();
             setTimeout(() => { window.location.href = './OnlineProjectAttend_NYCU.aspx'; }, 1000);
-        }, 1500);
+        }, 500);
     }
 
     setInterval(() => {
@@ -559,9 +639,26 @@
 
     window.addEventListener('load', function() {
         if (checkLogoutAndRedirect()) return;
+
         if (document.getElementById(MAIN_PAGE_ID)) {
             createPanel();
             if(!getStorage(KEY_LAST_REFRESH)) setStorage(KEY_LAST_REFRESH, Date.now());
+
+            const pendingNotifyStr = getStorage(KEY_PENDING_NOTIFY);
+            if (pendingNotifyStr) {
+                try {
+                    const notifyData = JSON.parse(pendingNotifyStr);
+                    const allProjects = scanProjects();
+                    const matchedProj = allProjects.find(p => p.name === notifyData.projectName);
+                    const newMissingHours = matchedProj ? matchedProj.missing : "未知";
+
+                    sendLineNotify(notifyData.actionText, notifyData.projectName, 'success', newMissingHours);
+                } catch (e) {
+                    console.error("處理延遲通知時發生錯誤:", e);
+                }
+                localStorage.removeItem(KEY_PENDING_NOTIFY);
+            }
+
         } else if (document.getElementById(CONFIRM_BTN_ID)) {
             checkConfirmPage();
         }
