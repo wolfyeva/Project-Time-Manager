@@ -116,10 +116,7 @@
 <br><img width="522" height="621" alt="image" src="https://github.com/user-attachments/assets/95b18d35-4552-4e00-b901-446757e5c299" />
 
 **步驟 7：加機器人為好友 (重要！)**
-最後，請在手機上將「柴柴機器人」加入好友，這樣才能順利接收通知：
-<br><img width="200" alt="image" src="https://github.com/user-attachments/assets/8fc57c47-b8ae-4dc9-889d-f23e6db4170a" />
-<img width="200" alt="image" src="https://github.com/user-attachments/assets/48fbeb02-5896-4f32-b2f7-a1f217cf8792" />
-或點擊連結加入：[@303kmzhe](https://line.me/R/ti/p/%40303kmzhe)
+最後，請在手機上將剛創好的LINE 機器人加入好友，這樣才能順利接收通知!
 
 👉 **完成！** 將複製好的 `LINE_USER_ID` 與 `LINE_TOKEN` 貼回 `AutoAttend.js` 腳本最上方的設定區即可。
 
