@@ -126,7 +126,17 @@
     function setStorage(key, val) { localStorage.setItem(key, val); }
 
     function formatTime(dateObj) {
-        return new Date(dateObj).toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
+        const d = new Date(dateObj);
+        const md = `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+        const time = d.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
+        return `${md} ${time}`;
+    }
+
+    function getLocalDateString(dateObj) {
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
     }
 
     function formatCountDown(ms) {
@@ -222,6 +232,7 @@
         }
 
         return {
+            inDate: getLocalDateString(now),
             inPeriod: defaultInPeriod, inH: defaultInH, inM: now.getMinutes(),
             projectIndex: targetId, outH: defaultOutH, outM: 1,
             chkSignOut: true, chkDebug: false, chkOnlySignOut: false
@@ -233,6 +244,7 @@
         const state = {
             projectIndex: document.getElementById('target_project').value,
             chkOnlySignOut: document.getElementById('chk_only_signout').checked,
+            inDate: document.getElementById('in_date').value,
             inPeriod: document.getElementById('in_period').value,
             inH: document.getElementById('in_h').value,
             inM: document.getElementById('in_m').value,
@@ -247,7 +259,13 @@
 
     function getInitialState() {
         const savedStateJson = getStorage(KEY_UI_STATE);
-        if (savedStateJson) { try { return JSON.parse(savedStateJson); } catch (e) {} }
+        if (savedStateJson) { 
+            try { 
+                let s = JSON.parse(savedStateJson);
+                if (!s.inDate) s.inDate = getLocalDateString(new Date());
+                return s;
+            } catch (e) {} 
+        }
         return calculateSmartDefaults();
     }
 
@@ -311,16 +329,24 @@
                 </div>
 
                 <div style="margin-bottom: 10px; background:#222; padding:6px; border-radius:4px; border-left: 4px solid #2196F3;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
                         <span id="lbl_time_setting" style="color:#2196F3; font-weight:bold; font-size:13px;">設定執行時間</span>
-                        <button id="btn_set_now" style="background:#4CAF50; color:white; border:none; border-radius:3px; padding:2px 8px; cursor:pointer; font-size:11px;">🕒 設為下一分鐘</button>
+                        <div style="display:flex; gap:3px;">
+                            <button id="btn_set_now" style="background:#4CAF50; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer; font-size:11px;">🕒 下一分鐘</button>
+                            <button id="btn_half_hr_after_last" style="background:#00BCD4; color:white; border:none; border-radius:3px; padding:2px 6px; cursor:pointer; font-size:11px;" title="距離最後一次簽退時間+30分鐘">接續+30分</button>
+                        </div>
                     </div>
-                    <select id="in_period" style="padding:2px;">
-                        <option value="AM" ${state.inPeriod === 'AM' ? 'selected' : ''}>上午</option>
-                        <option value="PM" ${state.inPeriod === 'PM' ? 'selected' : ''}>下午</option>
-                    </select>
-                    <select id="in_h" style="padding:2px;">${createRangeOptions(1, 12, state.inH)}</select> 點
-                    <select id="in_m" style="padding:2px;">${createRangeOptions(0, 59, state.inM, true)}</select> 分
+                    <div style="display:flex; align-items:center;">
+                        <input type="date" id="in_date" value="${state.inDate}" style="padding:2px; font-size:12px; margin-right:4px; background:#333; color:white; border:1px solid #555; border-radius:3px; cursor:pointer; min-width: 90px;">
+                        <select id="in_period" style="padding:2px; margin-right:2px; background:#333; color:white; border:1px solid #555; border-radius:3px;">
+                            <option value="AM" ${state.inPeriod === 'AM' ? 'selected' : ''}>上午</option>
+                            <option value="PM" ${state.inPeriod === 'PM' ? 'selected' : ''}>下午</option>
+                        </select>
+                        <select id="in_h" style="padding:2px; background:#333; color:white; border:1px solid #555; border-radius:3px;">${createRangeOptions(1, 12, state.inH)}</select>
+                        <span style="margin: 0 2px;">點</span>
+                        <select id="in_m" style="padding:2px; background:#333; color:white; border:1px solid #555; border-radius:3px;">${createRangeOptions(0, 59, state.inM, true)}</select>
+                        <span style="margin-left: 2px;">分</span>
+                    </div>
                 </div>
 
                 <div id="block_duration_setting" style="margin-bottom: 10px; background:#222; padding:6px; border-radius:4px; border-left: 4px solid #FF9800;">
@@ -362,11 +388,65 @@
             const period = h >= 12 ? 'PM' : 'AM';
             if (h === 0) h = 12;
             else if (h > 12) h -= 12;
+            document.getElementById('in_date').value = getLocalDateString(now);
             document.getElementById('in_period').value = period;
             document.getElementById('in_h').value = h;
             document.getElementById('in_m').value = m;
             saveUIState();
             log("🕒 已快速設定為下一分鐘！");
+        });
+
+        document.getElementById('btn_half_hr_after_last').addEventListener('click', () => {
+            let latestOutTime = null;
+
+            // 1. 優先檢查排程清單中的「簽退」任務
+            const list = getSchedules();
+            const scheduledOuts = list.filter(t => t.actionText === '簽退');
+            if (scheduledOuts.length > 0) {
+                scheduledOuts.forEach(t => {
+                    const d = new Date(t.targetTime);
+                    if (!latestOutTime || d > latestOutTime) {
+                        latestOutTime = d;
+                    }
+                });
+            } else {
+                // 2. 如果排程中沒有，才去檢查網頁上的「本日簽退時間」
+                const grid = document.getElementById(MAIN_PAGE_ID);
+                if (grid) {
+                    const regex = /本日簽退時間[：:]\s*(\d{2}):(\d{2})/g;
+                    let match;
+                    const text = grid.innerText;
+                    const now = new Date();
+                    while ((match = regex.exec(text)) !== null) {
+                        const d = new Date();
+                        d.setHours(parseInt(match[1]), parseInt(match[2]), 0, 0);
+                        // 防呆：如果網頁上顯示的簽退時間比「現在」還晚，代表那是昨天的紀錄（過午夜尚未更新）
+                        if (d > now) {
+                            d.setDate(d.getDate() - 1);
+                        }
+                        if (!latestOutTime || d > latestOutTime) {
+                            latestOutTime = d;
+                        }
+                    }
+                }
+            }
+
+            if (latestOutTime) {
+                const nextTime = new Date(latestOutTime.getTime() + 30 * 60000);
+                let h = nextTime.getHours();
+                const m = nextTime.getMinutes();
+                const period = h >= 12 ? 'PM' : 'AM';
+                if (h === 0) h = 12;
+                else if (h > 12) h -= 12;
+                document.getElementById('in_date').value = getLocalDateString(nextTime);
+                document.getElementById('in_period').value = period;
+                document.getElementById('in_h').value = h;
+                document.getElementById('in_m').value = m;
+                saveUIState();
+                log("🕒 已設定為最後簽退時間後 30 分鐘！");
+            } else {
+                alert("網頁上與排程中皆找不到簽退紀錄，無法計算時間！");
+            }
         });
 
         const inputs = div.querySelectorAll('select, input');
@@ -484,10 +564,17 @@
         if (document.getElementById('in_period').value === 'PM' && inH !== 12) inH += 12;
         if (document.getElementById('in_period').value === 'AM' && inH === 12) inH = 0;
 
-        const targetDate = new Date();
+        const dateStr = document.getElementById('in_date').value;
+        let targetDate;
+        if (dateStr) {
+            targetDate = new Date(dateStr);
+        } else {
+            targetDate = new Date();
+        }
         targetDate.setHours(inH, inM, 0, 0);
 
-        if (targetDate < new Date()) {
+        const todayStr = getLocalDateString(new Date());
+        if (dateStr === todayStr && targetDate < new Date()) {
             targetDate.setDate(targetDate.getDate() + 1);
         }
 
