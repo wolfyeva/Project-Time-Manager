@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         NYCU 自動簽到退排程助手
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      2.1
 // @description  多筆排程佇列，支援空白時數計畫，優化重複按鈕過濾，並支援 LINE 推播通知
 // @author       Gemini & 柴柴
 // @match        *://*/*OnlineProjectAttend_NYCU.aspx*
@@ -306,7 +306,7 @@
 
         div.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
-                <h3 id="panel_title" style="margin:0; font-size:16px; color:#4CAF50;">📅 排程助手 V2.0</h3>
+                <h3 id="panel_title" style="margin:0; font-size:16px; color:#4CAF50;">📅 排程助手 V2.1</h3>
                 <span id="btn_panel_toggle" style="${toggleBtnStyle}" title="縮小/展開">${isCollapsed ? '⬜' : '➖'}</span>
             </div>
             <div id="panel_content_mini" style="display:${isCollapsed ? 'block' : 'none'}; color:yellow; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
@@ -316,6 +316,7 @@
                 <div style="background:#111; border: 1px solid #555; border-radius:4px; padding: 5px; margin-bottom: 10px;">
                     <div style="font-size:12px; color:#aaa; margin-bottom: 5px; font-weight:bold;">📋 待執行任務清單:</div>
                     <div id="schedule_list_container" style="max-height: 100px; overflow-y: auto; font-size: 12px;"></div>
+                    <div id="prediction_container" style="display:none; margin-top: 5px; padding-top: 5px; border-top: 1px dashed #555; background: #1a1a1a;"></div>
                 </div>
 
                 <div style="margin-bottom: 8px;">
@@ -517,6 +518,8 @@
         const list = getSchedules();
         if (list.length === 0) {
             container.innerHTML = '<div style="color:#777; text-align:center; padding: 5px;">目前無排程任務</div>';
+            const predictContainer = document.getElementById('prediction_container');
+            if (predictContainer) predictContainer.style.display = 'none';
             return;
         }
         let html = '';
@@ -534,7 +537,56 @@
                 </div>
             `;
         });
+
+        // --- 計算預計剩餘時數 ---
+        const allProjects = scanProjects();
+        const summary = {};
+        list.forEach(t => {
+            const baseId = t.projectId.replace('signIn', '').replace('signOut', '');
+            if (!summary[baseId]) summary[baseId] = { schedules: [], name: t.projectName };
+            summary[baseId].schedules.push(t);
+        });
+
+        let predictHtml = '';
+        for (const baseId in summary) {
+            const proj = summary[baseId];
+            proj.schedules.sort((a, b) => a.targetTime - b.targetTime);
+            let scheduledHours = 0;
+            let hasPair = false;
+            let lastIn = null;
+            proj.schedules.forEach(t => {
+                if (t.actionText === '簽到') {
+                    lastIn = t.targetTime;
+                } else if (t.actionText === '簽退') {
+                    if (lastIn !== null && t.targetTime >= lastIn) {
+                        const ms = t.targetTime - lastIn;
+                        scheduledHours += Math.floor(ms / (1000 * 60 * 60));
+                        lastIn = null;
+                        hasPair = true;
+                    }
+                }
+            });
+
+            if (hasPair) {
+                const matchedOrig = allProjects.find(p => p.btnId.includes(baseId));
+                let remainText = '';
+                if (matchedOrig && matchedOrig.missing && !isNaN(parseInt(matchedOrig.missing))) {
+                    const origHours = parseInt(matchedOrig.missing);
+                    let remain = origHours - scheduledHours;
+                    if (remain < 0) remain = 0;
+                    remainText = `，尚缺 <b>${remain}h</b>`;
+                }
+                
+                predictHtml += `<div style="color:#00BCD4; font-size:12px; margin-top:3px; padding-left:5px;">📊 ${proj.name}: 已排 <b>${scheduledHours}h</b>${remainText}</div>`;
+            }
+        }
+
         container.innerHTML = html;
+        const predictContainer = document.getElementById('prediction_container');
+        if (predictContainer) {
+            predictContainer.innerHTML = predictHtml;
+            predictContainer.style.display = predictHtml === '' ? 'none' : 'block';
+        }
     }
 
     function handleAddTask() {
