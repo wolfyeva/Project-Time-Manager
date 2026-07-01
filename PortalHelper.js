@@ -5,11 +5,21 @@
 // @description  解決前端框架資料綁定問題，優化 Token Timeout 處理流程，全自動登入跳轉。
 // @author       Gemini & 柴柴
 // @match        https://portal.nycu.edu.tw/*
-// @grant        none
+// @match        *://*/*OnlineProjectAttend_NYCU.aspx*
+// @grant        GM_setValue
+// @grant        GM_getValue
 // ==/UserScript==
 
 (function() {
     'use strict';
+
+    if (window.location.href.includes('OnlineProjectAttend_NYCU.aspx')) {
+        GM_setValue("KEY_ATTEND_HEARTBEAT", Date.now());
+        setInterval(() => {
+            GM_setValue("KEY_ATTEND_HEARTBEAT", Date.now());
+        }, 2000);
+        return;
+    }
 
     // ================= 配置區域 =================
     const YOUR_ID = "";      // <--- 請使用者在此填寫單一入口帳號
@@ -88,6 +98,12 @@
 
         // 3. 登入成功後：尋找差勤系統連結
         if (document.querySelector('.user-name') || window.location.href.includes('/links/')) {
+            const lastHeartbeat = GM_getValue("KEY_ATTEND_HEARTBEAT", 0);
+            if (Date.now() - lastHeartbeat < 6000) {
+                console.log("[Portal Helper] 偵測到差勤系統分頁仍在運作，不執行自動跳轉，保留 Portal 供使用者瀏覽。");
+                return;
+            }
+
             const attendanceLink = document.querySelector('a[href="#/redirect/timeclockParttime"]');
 
             if (attendanceLink) {
