@@ -572,16 +572,23 @@
         const projects = scanProjects();
         let html = '';
 
-        const filteredProjects = projects.filter(p => p.type !== 'none');
+        const filteredProjects = projects.filter(p => {
+            if (p.type !== 'none') return true;
+            if (!p.endDate) return true;
+            const endMs = new Date(p.endDate).setHours(23, 59, 59, 999);
+            return Date.now() <= endMs;
+        });
 
         if (filteredProjects.length === 0) {
-            html = `<option value="-1" data-type="none">⚠️ 無可操作計畫 (今日已簽退或無按鈕)</option>`;
+            html = `<option value="-1" data-type="none">⚠️ 查無任何計畫 (請確保在正確頁面)</option>`;
         } else {
             const currentSelected = document.getElementById('target_project').value;
             filteredProjects.forEach(p => {
                 const isSel = (p.btnId === currentSelected) ? 'selected' : '';
                 const missingText = (p.missing !== "未知") ? `(缺${p.missing})` : '';
-                const icon = p.type === 'signOut' ? '🏃‍♂️(執行中)' : '📝';
+                let icon = '📝';
+                if (p.type === 'signOut') icon = '🏃‍♂️(執行中)';
+                if (p.type === 'none') icon = '📅(排程/未來)';
                 html += `<option value="${p.btnId}" data-type="${p.type}" ${isSel}>${icon} ${p.name} ${missingText}</option>`;
             });
             if (!filteredProjects.some(p => p.btnId === currentSelected) && filteredProjects.length > 0) {
@@ -1503,22 +1510,25 @@
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'nycu_calendar_modal';
-            modal.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:95%; max-width:1050px; max-height:95vh; background:rgba(18, 18, 18, 0.96); backdrop-filter:blur(16px); color:white; padding:15px 22px; border-radius:16px; z-index:2147483647; box-shadow:0 12px 48px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.15); font-family:"Inter", Arial, sans-serif; display:flex; flex-direction:column; gap:12px; overflow-y:auto;';
+            modal.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:96%; max-width:1100px; height:96vh; background:rgba(18, 18, 18, 0.96); backdrop-filter:blur(16px); color:white; padding:15px 20px; border-radius:12px; z-index:2147483647; box-shadow:0 12px 48px rgba(0,0,0,0.8); border: 1px solid rgba(255,255,255,0.15); font-family:"Inter", Arial, sans-serif; display:flex; flex-direction:column; gap:10px; overflow:hidden;';
             
             modal.innerHTML = `
-                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:12px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:10px;">
                     <div>
-                        <h2 style="margin:0; font-size:20px; color:#00B0FF; font-weight:700;">📅 視覺化打卡行事曆 (Visual Attendance Calendar)</h2>
-                        <p style="margin:4px 0 0; font-size:12px; color:#aaa;">隨時監控並檢視當月份每一天的排程簽到退、計畫顯示期間與每週禁止排班時段</p>
+                        <h2 style="margin:0; font-size:18px; color:#00B0FF; font-weight:700;">📅 視覺化打卡行事曆 (Visual Attendance Calendar)</h2>
+                        <p style="margin:2px 0 0; font-size:12px; color:#aaa;">隨時監控並檢視當月份每一天的排程簽到退、計畫顯示期間與每週禁止排班時段</p>
                     </div>
                     <div style="display:flex; gap:10px;">
-                        <button id="btn_toggle_cal_filters" style="background:#00838F; color:#fff; border:1px solid #00ACC1; border-radius:8px; padding:8px 14px; font-weight:bold; cursor:pointer; font-size:13px;">⚙️ 顯示選項 ▼</button>
-                        <button id="btn_close_calendar" style="background:#333; color:#fff; border:1px solid #555; border-radius:8px; padding:8px 16px; font-weight:bold; cursor:pointer; font-size:13px;">❌ 關閉</button>
+                        <button id="btn_toggle_cal_filters" style="background:#00838F; color:#fff; border:1px solid #00ACC1; border-radius:8px; padding:6px 10px; font-weight:bold; cursor:pointer; font-size:12px;">⚙️ 顯示選項 ▼</button>
+                        <button id="btn_close_calendar" style="background:#333; color:#fff; border:1px solid #555; border-radius:8px; padding:6px 12px; font-weight:bold; cursor:pointer; font-size:12px;">❌ 關閉</button>
                     </div>
                 </div>
-                <div style="display:flex; justify-content:space-between; align-items:center; background:#1c1c1c; padding:8px 18px; border-radius:8px; border:1px solid #333;">
-                    <button id="btn_cal_prev" style="background:#2a2a2a; color:white; border:1px solid #444; padding:6px 14px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:13px;">◀ 上個月</button>
-                    <h3 id="cal_month_title" style="margin:0; font-size:17px; color:#ffeb3b; font-weight:bold;">2026年 6月</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#1c1c1c; padding:8px 15px; border-radius:8px; border:1px solid #333; position:relative;">
+                    <button id="btn_cal_prev" style="background:#2a2a2a; color:white; border:1px solid #444; padding:6px 12px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:12px;">◀ 上個月</button>
+                    <div style="position:absolute; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:12px;">
+                        <h3 id="cal_month_title" style="margin:0; font-size:17px; color:#ffeb3b; font-weight:bold;">2026年 6月</h3>
+                        <button id="btn_cal_today" style="background:#00838F; color:white; border:1px solid #00ACC1; padding:4px 10px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:11px;">回到今天</button>
+                    </div>
                     <button id="btn_cal_next" style="background:#2a2a2a; color:white; border:1px solid #444; padding:6px 14px; border-radius:6px; font-weight:bold; cursor:pointer; font-size:13px;">下個月 ▶</button>
                 </div>
                 <div id="cal_options_container" style="display:none; position:absolute; top:65px; right:22px; background:#151515; padding:12px 16px; border-radius:8px; border:1px solid #444; flex-direction:column; gap:12px; align-items:flex-start; font-size:12px; z-index:999; box-shadow:0 8px 32px rgba(0,0,0,0.9);">
@@ -1530,7 +1540,7 @@
                     <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:#fff;"><input type="checkbox" id="chk_show_daily_hours" checked> 顯示當日累積工時</label>
                 </div>
                 <div id="cal_proj_duration_container" style="display:none;"></div>
-                <div id="cal_grid_container" style="flex-grow:1;"></div>
+                <div id="cal_grid_container" style="flex-grow:1; display:flex; flex-direction:column; min-height:0;"></div>
             `;
             document.body.appendChild(modal);
 
@@ -1566,10 +1576,10 @@
                 const btn = document.getElementById('btn_toggle_cal_filters');
                 if (optBox.style.display === 'none') {
                     optBox.style.display = 'flex';
-                    btn.innerText = '⚙️ 顯示選項 ▲';
+                    btn.innerText = '⚙️ 選項 ▲';
                 } else {
                     optBox.style.display = 'none';
-                    btn.innerText = '⚙️ 顯示選項 ▼';
+                    btn.innerText = '⚙️ 選項 ▼';
                 }
             });
 
@@ -1584,6 +1594,14 @@
                 if (currentCalendarMonth > 11) { currentCalendarMonth = 0; currentCalendarYear++; }
                 renderCalendarGrid();
             });
+            const btnToday = document.getElementById('btn_cal_today');
+            if (btnToday) {
+                btnToday.addEventListener('click', () => {
+                    currentCalendarYear = new Date().getFullYear();
+                    currentCalendarMonth = new Date().getMonth();
+                    renderCalendarGrid();
+                });
+            }
         } else {
             modal.style.display = modal.style.display === 'none' ? 'flex' : 'none';
         }
@@ -1598,7 +1616,6 @@
     function renderCalendarGrid() {
         const title = document.getElementById('cal_month_title');
         const container = document.getElementById('cal_grid_container');
-        const projContainer = document.getElementById('cal_proj_duration_container');
         if (!title || !container) return;
 
         title.innerText = `${currentCalendarYear}年 ${currentCalendarMonth + 1}月`;
@@ -1609,13 +1626,9 @@
             if (currentCalendarYear < nowObj.getFullYear() || (currentCalendarYear === nowObj.getFullYear() && currentCalendarMonth <= nowObj.getMonth())) {
                 btnPrev.disabled = true;
                 btnPrev.style.opacity = '0.3';
-                btnPrev.style.cursor = 'not-allowed';
-                btnPrev.title = '過去月份無排程紀錄';
             } else {
                 btnPrev.disabled = false;
                 btnPrev.style.opacity = '1';
-                btnPrev.style.cursor = 'pointer';
-                btnPrev.title = '';
             }
         }
 
@@ -1646,8 +1659,10 @@
             }
         };
 
+        const rowCount = Math.ceil((firstDay + daysInMonth) / 7);
+
         let gridHtml = `
-            <div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:8px; text-align:center; font-weight:bold; font-size:14px; margin-bottom:12px; color:#bbb;">
+            <div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:8px; text-align:center; font-weight:bold; font-size:13px; margin-bottom:6px; color:#bbb;">
                 <div><span style="color:#ff5555;">日 (Sun)</span>${getExHtml(0)}</div>
                 <div><span>一 (Mon)</span>${getExHtml(1)}</div>
                 <div><span>二 (Tue)</span>${getExHtml(2)}</div>
@@ -1656,7 +1671,7 @@
                 <div><span>五 (Fri)</span>${getExHtml(5)}</div>
                 <div><span style="color:#4CAF50;">六 (Sat)</span>${getExHtml(6)}</div>
             </div>
-            <div style="display:grid; grid-template-columns:repeat(7, 1fr); gap:0; border-top:1px solid #2a2a2a; border-left:1px solid #2a2a2a; background:#121212; border-radius:8px; overflow:hidden; box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+            <div style="display:grid; grid-template-columns:repeat(7, 1fr); grid-template-rows:repeat(${rowCount}, minmax(0, 1fr)); flex:1 1 0; min-height:0; gap:1px; background:#2a2a2a; border:1px solid #2a2a2a; border-radius:8px; overflow:hidden;">
         `;
 
         let cells = [];
@@ -1744,68 +1759,81 @@
                                 isActive = true;
                                 const pStartStr = getLocalDateString(new Date(p.startDate.trim()));
                                 const pEndStr = getLocalDateString(new Date(p.endDate.trim()));
-                                if (thisDateStr === pStartStr || cellIdx % 7 === 0 || cellIdx === 0) isStart = true;
-                                if (thisDateStr === pEndStr || cellIdx % 7 === 6 || cellIdx === visibleCells.length - 1) isEnd = true;
+                                if (thisDateStr === pStartStr || cellIdx === 0) isStart = true;
+                                if (thisDateStr === pEndStr || cellIdx === visibleCells.length - 1) isEnd = true;
                             }
                         } else {
                             isActive = true;
-                            if (cellIdx % 7 === 0 || cellIdx === 0) isStart = true;
-                            if (cellIdx % 7 === 6 || cellIdx === visibleCells.length - 1) isEnd = true;
+                            if (cellIdx === 0) isStart = true;
+                            if (cellIdx === visibleCells.length - 1) isEnd = true;
                         }
 
                         if (isActive) {
                             const c = projColors[pIdx % projColors.length];
                             const cleanName = p.name.split(' (')[0];
                             const text = isStart ? `${cleanName} (尚缺: ${p.missing})` : '&nbsp;';
-                            const mLeft = isStart ? '4px' : '-6px';
-                            const mRight = isEnd ? '4px' : '-6px';
+                            const mLeft = isStart ? '4px' : '-4px';
+                            const mRight = isEnd ? '4px' : '-4px';
                             const rad = `${isStart ? '4px' : '0'} ${isEnd ? '4px' : '0'} ${isEnd ? '4px' : '0'} ${isStart ? '4px' : '0'}`;
                             
                             activeProjsHtml += `
-                                <div style="background:${c.bg}; color:${c.fg}; margin:0 ${mRight} 3px ${mLeft}; padding:2px 6px; border-radius:${rad}; font-size:12px; font-weight:bold; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; height:20px; line-height:16px; position:relative; z-index:${isEnd ? 1 : 2}; box-shadow:0 1px 3px rgba(0,0,0,0.3);" title="${cleanName} (尚缺: ${p.missing})">
+                                <div style="background:${c.bg}; color:${c.fg}; margin:0 ${mRight} 2px ${mLeft}; padding:1px 4px; border-radius:${rad}; font-size:10px; font-weight:bold; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; height:16px; line-height:14px; position:relative; z-index:${isEnd ? 1 : 2}; box-shadow:0 1px 3px rgba(0,0,0,0.3);" title="${cleanName} (尚缺: ${p.missing})">
                                     ${text}
                                 </div>
                             `;
                         } else {
-                            activeProjsHtml += `<div style="height:23px; margin-bottom:3px;"></div>`;
+                            activeProjsHtml += `<div style="height:18px; margin-bottom:2px;"></div>`;
                         }
                     });
                 }
 
                 let tasksHtml = '';
                 if (showTask) {
-                    dayTasks.forEach(task => {
+                    dayTasks.forEach((task, idx) => {
                         const timeStr = new Date(task.targetTime).toTimeString().substring(0,5);
                         const isSignIn = task.actionText === '簽到';
                         const bg = isSignIn ? 'rgba(76, 175, 80, 0.15)' : 'rgba(244, 67, 54, 0.15)';
                         const fg = isSignIn ? '#4CAF50' : '#f44336';
                         
-                        tasksHtml += `
-                            <div style="background:${bg}; color:${fg}; padding:3px 6px; border-radius:4px; font-size:11px; margin-bottom:4px; text-align:left; display:flex; justify-content:space-between; align-items:center; border:1px solid ${fg};" title="${task.projectName}">
-                                <span>${timeStr} [${task.actionText}]</span>
-                                <span style="font-size:9px; color:#888;">${task.projectName.substring(0,6)}...</span>
-                            </div>
-                        `;
+                        if (idx < 2) {
+                            tasksHtml += `
+                                <div style="background:${bg}; color:${fg}; padding:2px 4px; border-radius:3px; font-size:10px; margin-bottom:2px; text-align:left; display:flex; justify-content:space-between; align-items:center; border:1px solid ${fg};" title="${task.projectName}">
+                                    <span>${timeStr} [${task.actionText}]</span>
+                                    <span style="font-size:9px; color:#888;">${task.projectName.substring(0,6)}...</span>
+                                </div>
+                            `;
+                        } else if (idx === 2) {
+                            const allTasksStr = dayTasks.map(t => {
+                                const tTime = new Date(t.targetTime).toTimeString().substring(0,5);
+                                return `${tTime} [${t.actionText}] ${t.projectName}`;
+                            }).join('&#10;');
+                            
+                            tasksHtml += `
+                                <div style="background:rgba(255,255,255,0.1); color:#ccc; padding:2px 4px; border-radius:3px; font-size:10px; margin-bottom:2px; text-align:center; border:1px dashed #666; cursor:help;" title="當日全部排程：&#10;${allTasksStr}">
+                                    還有 ${dayTasks.length - 2} 筆排程... (移入檢視)
+                                </div>
+                            `;
+                        }
                     });
                 }
 
-                const hourBadge = (showHours && dayHours > 0) ? `<div style="margin:6px 0 0; background:#2a2a2a; color:#00BCD4; font-size:11px; font-weight:bold; padding:2px 4px; border-radius:4px; text-align:center; border:1px solid #00BCD4;">⏳ 當日工時: ${dayHours}h</div>` : '';
+                const hourBadge = (showHours && dayHours > 0) ? `<div style="margin:2px 0 0; background:#2a2a2a; color:#00BCD4; font-size:10px; font-weight:bold; padding:1px 3px; border-radius:3px; text-align:center; border:1px solid #00BCD4;">⏳ 當日工時: ${dayHours}h</div>` : '';
                 const borderStyle = isToday ? 'border-right:1px solid #00B0FF; border-bottom:1px solid #00B0FF; border-left:1px solid #00B0FF; box-shadow:inset 0 0 12px rgba(0, 176, 255, 0.3);' : 'border-right:1px solid #2a2a2a; border-bottom:1px solid #2a2a2a;';
                 const headBg = isToday ? 'background:#00B0FF; color:#000;' : 'background:#242424; color:#bbb; border-bottom:1px solid #2a2a2a;';
 
                 gridHtml += `
-                    <div style="background:#1c1c1c; ${borderStyle} overflow:hidden; display:flex; flex-direction:column; min-height:100px;">
-                        <div style="padding:4px 8px; font-size:12px; font-weight:bold; text-align:right; ${headBg} margin-bottom:6px;">
+                    <div style="background:#1c1c1c; ${borderStyle} overflow:hidden; display:flex; flex-direction:column; min-height:0;">
+                        <div style="padding:2px 6px; font-size:11px; font-weight:bold; text-align:right; ${headBg} margin-bottom:4px; flex-shrink:0;">
                             ${d} ${isToday ? ' (今日)' : ''}
                         </div>
-                        <div style="padding:0 0 6px 0; flex-grow:1; display:flex; flex-direction:column; justify-content:space-between;">
-                            <div>
+                        <div style="flex-grow:1; display:flex; flex-direction:column; justify-content:space-between; padding:0 4px 4px; min-height:0;">
+                            <div style="overflow-y:auto; scrollbar-width:none; min-height:0; flex-grow:1;">
                                 ${activeProjsHtml}
-                                <div style="padding:0 6px;">
+                                <div style="padding:0 2px;">
                                     ${tasksHtml}
                                 </div>
                             </div>
-                            <div style="padding:0 6px;">${hourBadge}</div>
+                            <div style="padding:0 2px; flex-shrink:0;">${hourBadge}</div>
                         </div>
                     </div>
                 `;
